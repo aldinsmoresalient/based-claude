@@ -1,0 +1,48 @@
+{
+  "name": "based-claude",
+  "version": "1.0.0",
+  "description": "A repo-owned, agent-native memory layer for Claude Code",
+  "bin": {
+    "based-claude": "./bin/claude-sdk"
+  },
+  "scripts": {
+    "postinstall": "chmod +x ./bin/claude-sdk ./scripts/*.sh 2>/dev/null || true"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aldinsmoresalient/based-claude.git"
+  },
+  "keywords": [
+    "claude",
+    "ai",
+    "coding-assistant",
+    "memory",
+    "agent",
+    "developer-tools"
+  ],
+  "author": "aldinsmoresalient",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/aldinsmoresalient/based-claude/issues"
+  },
+  "homepage": "https://github.com/aldinsmoresalient/based-claude#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "files": [
+    "bin/",
+    "cli/",
+    "docs/",
+    "scripts/",
+    "skills/",
+    "subagents/",
+    "templates/",
+    "install.sh",
+    "README.md",
+    "LICENSE"
+  ]
+}

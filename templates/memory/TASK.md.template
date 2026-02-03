@@ -1,0 +1,23 @@
+### TASK-{{NUMBER}}: {{TITLE}}
+
+STATUS: pending
+GOAL: {{GOAL}}
+STARTED: {{DATE}}
+UPDATED: {{DATE}}
+
+FILES_TOUCHED:
+- [none yet]
+
+PROGRESS:
+- [ ] {{FIRST_STEP}}
+
+BLOCKERS:
+- [none]
+
+OPEN_QUESTIONS:
+- [none]
+
+NEXT_STEPS:
+- {{NEXT_STEP}}
+
+---

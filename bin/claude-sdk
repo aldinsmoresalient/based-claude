@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+#
+# Claude Code Starter SDK - Main CLI Entry Point
+# A repo-owned, agent-native memory layer for Claude Code
+#
+set -euo pipefail
+
+SDK_VERSION="1.0.0"
+SDK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Source common utilities
+source "$SDK_ROOT/cli/lib/common.sh"
+
+#───────────────────────────────────────────────────────────────────────────────
+# Usage
+#───────────────────────────────────────────────────────────────────────────────
+usage() {
+    cat <<EOF
+Claude Code Starter SDK v${SDK_VERSION}
+
+A repo-owned, agent-native memory layer that survives across sessions,
+encodes architectural intent, and helps agents re-orient in seconds.
+
+USAGE:
+    claude-sdk <command> [options]
+
+COMMANDS:
+    install     Install SDK (global or project-level)
+    uninstall   Remove SDK installation
+    doctor      Validate installation and configuration
+    atlas       Manage Repo Atlas (build, refresh, status)
+    init        Initialize memory files in current project
+
+OPTIONS:
+    -h, --help      Show this help message
+    -v, --version   Show version
+    --dry-run       Preview changes without applying them
+
+EXAMPLES:
+    # Install globally (user-level)
+    claude-sdk install --global
+
+    # Install for current project
+    claude-sdk install --project
+
+    # Preview what install would do
+    claude-sdk install --project --dry-run
+
+    # Build repo atlas
+    claude-sdk atlas build
+
+    # Initialize memory files
+    claude-sdk init
+
+    # Check installation health
+    claude-sdk doctor
+
+For detailed documentation:
+    claude-sdk help <command>
+
+EOF
+}
+
+#───────────────────────────────────────────────────────────────────────────────
+# Version
+#───────────────────────────────────────────────────────────────────────────────
+version() {
+    echo "claude-sdk version $SDK_VERSION"
+}
+
+#───────────────────────────────────────────────────────────────────────────────
+# Help for specific command
+#───────────────────────────────────────────────────────────────────────────────
+help_command() {
+    local cmd="${1:-}"
+    case "$cmd" in
+        install)
+            source "$SDK_ROOT/cli/install.sh"
+            install_help
+            ;;
+        uninstall)
+            source "$SDK_ROOT/cli/uninstall.sh"
+            uninstall_help
+            ;;
+        doctor)
+            source "$SDK_ROOT/cli/doctor.sh"
+            doctor_help
+            ;;
+        atlas)
+            source "$SDK_ROOT/cli/atlas.sh"
+            atlas_help
+            ;;
+        init)
+            source "$SDK_ROOT/cli/init.sh"
+            init_help
+            ;;
+        *)
+            usage
+            ;;
+    esac
+}
+
+#───────────────────────────────────────────────────────────────────────────────
+# Main command dispatcher
+#───────────────────────────────────────────────────────────────────────────────
+main() {
+    local cmd="${1:-}"
+    shift || true
+
+    case "$cmd" in
+        install)
+            source "$SDK_ROOT/cli/install.sh"
+            cmd_install "$@"
+            ;;
+        uninstall)
+            source "$SDK_ROOT/cli/uninstall.sh"
+            cmd_uninstall "$@"
+            ;;
+        doctor)
+            source "$SDK_ROOT/cli/doctor.sh"
+            cmd_doctor "$@"
+            ;;
+        atlas)
+            source "$SDK_ROOT/cli/atlas.sh"
+            cmd_atlas "$@"
+            ;;
+        init)
+            source "$SDK_ROOT/cli/init.sh"
+            cmd_init "$@"
+            ;;
+        help)
+            help_command "$@"
+            ;;
+        -h|--help|"")
+            usage
+            ;;
+        -v|--version)
+            version
+            ;;
+        *)
+            error "Unknown command: $cmd"
+            echo ""
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

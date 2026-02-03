@@ -5,8 +5,16 @@
 #
 set -euo pipefail
 
-SDK_VERSION="1.0.0"
-SDK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SDK_VERSION="1.0.1"
+
+# Resolve symlinks to find actual install location
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SDK_ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
 
 # Source common utilities
 source "$SDK_ROOT/cli/lib/common.sh"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Claude Code Starter SDK - Main CLI Entry Point
+# Based Claude - Main CLI Entry Point
 # A repo-owned, agent-native memory layer for Claude Code
 #
 set -euo pipefail
@@ -16,7 +16,7 @@ source "$SDK_ROOT/cli/lib/common.sh"
 #───────────────────────────────────────────────────────────────────────────────
 usage() {
     cat <<EOF
-Claude Code Starter SDK v${SDK_VERSION}
+Based Claude v${SDK_VERSION}
 
 A repo-owned, agent-native memory layer that survives across sessions,
 encodes architectural intent, and helps agents re-orient in seconds.

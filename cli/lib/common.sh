@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Common utilities for Claude Code SDK CLI
+# Common utilities for Based Claude CLI
 #
 
 #───────────────────────────────────────────────────────────────────────────────

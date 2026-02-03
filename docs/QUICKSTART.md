@@ -1,10 +1,10 @@
-# Claude Code Starter SDK - Quickstart
+# Based Claude - Quickstart
 
 Get productive with the SDK in under 5 minutes.
 
 ## What is this?
 
-The Claude Code Starter SDK provides a **repo-owned memory layer** that helps AI agents:
+The Based Claude provides a **repo-owned memory layer** that helps AI agents:
 - Re-orient quickly after context loss
 - Understand codebase architecture
 - Respect safety invariants

@@ -540,7 +540,7 @@ create_claude_instructions() {
     cat > "$file" <<'EOF'
 # Claude Code Instructions
 
-This project uses the **Claude Code Starter SDK** memory layer.
+This project uses the **Based Claude** memory layer.
 
 ## On Session Start
 

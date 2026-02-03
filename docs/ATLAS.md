@@ -1,6 +1,6 @@
 # Repo Atlas Guide
 
-The Repo Atlas is the core differentiator of the Claude Code Starter SDK.
+The Repo Atlas is the core differentiator of the Based Claude.
 It provides persistent, grep-friendly codebase understanding.
 
 ## Purpose

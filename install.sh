@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Claude Code Starter SDK - One-Line Installer
+# Based Claude - One-Line Installer
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/YOUR_ORG/claude-code-sdk/main/install.sh | bash
@@ -60,7 +60,7 @@ main() {
 
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║           Claude Code Starter SDK Installer v${VERSION}          ║"
+    echo "║              Based Claude Installer v${VERSION}                   ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
 
@@ -83,7 +83,7 @@ main() {
 
 usage() {
     cat <<EOF
-Claude Code Starter SDK Installer
+Based Claude Installer
 
 USAGE:
     curl -fsSL <url> | bash

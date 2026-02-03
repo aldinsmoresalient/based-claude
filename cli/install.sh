@@ -18,7 +18,7 @@ OPTIONS:
     -h, --help      Show this help
 
 DESCRIPTION:
-    Installs the Claude Code Starter SDK, including:
+    Installs the Based Claude, including:
     - Skills (spec-generator, code-review, debugging-playbook, repo-atlas, search-helper)
     - Subagents (planner, reviewer, indexer)
     - Configuration templates

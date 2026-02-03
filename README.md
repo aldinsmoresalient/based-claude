@@ -1,4 +1,4 @@
-# Claude Code Starter SDK
+# Based Claude
 
 A repo-owned, agent-native memory layer for Claude Code and similar agentic coding tools.
 

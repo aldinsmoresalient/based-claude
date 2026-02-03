@@ -1,6 +1,6 @@
 # Customization Guide
 
-How to customize the Claude Code Starter SDK for your project.
+How to customize the Based Claude for your project.
 
 ## Customizing the Contract
 

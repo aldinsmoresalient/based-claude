@@ -123,6 +123,7 @@ cmd_init() {
         ensure_dir "$sdk_dir"
         ensure_dir "$sdk_dir/memory"
         ensure_dir "$sdk_dir/atlas"
+        ensure_dir "$sdk_dir/prompts"
     fi
 
     # Initialize atlas structure
@@ -208,8 +209,37 @@ cmd_init() {
         fi
     fi
 
+    # Initialize prompts
+    step 4 "Initializing prompts..."
+
+    local build_prompt="$sdk_dir/prompts/BUILD_ATLAS.md"
+    if [[ ! -f "$build_prompt" ]] || $force; then
+        if $dry_run; then
+            dry_run_msg "Create $build_prompt"
+        else
+            create_build_atlas_prompt "$build_prompt"
+            info "  Created: prompts/BUILD_ATLAS.md"
+            ((created_count++))
+        fi
+    else
+        info "  BUILD_ATLAS.md exists"
+    fi
+
+    local refresh_prompt="$sdk_dir/prompts/REFRESH_ATLAS.md"
+    if [[ ! -f "$refresh_prompt" ]] || $force; then
+        if $dry_run; then
+            dry_run_msg "Create $refresh_prompt"
+        else
+            create_refresh_atlas_prompt "$refresh_prompt"
+            info "  Created: prompts/REFRESH_ATLAS.md"
+            ((created_count++))
+        fi
+    else
+        info "  REFRESH_ATLAS.md exists"
+    fi
+
     # Initialize CLAUDE.md (agent instructions) in project root
-    step 4 "Initializing agent instructions..."
+    step 5 "Initializing agent instructions..."
     local claude_file="$project_root/CLAUDE.md"
 
     if [[ -f "$claude_file" ]] && ! $force; then
@@ -540,42 +570,79 @@ create_claude_instructions() {
     cat > "$file" <<'EOF'
 # Claude Code Instructions
 
-This project uses the **Based Claude** memory layer.
+This project uses **Based Claude** - a memory layer that helps you persist understanding across sessions.
+
+---
 
 ## On Session Start
 
-1. **Read `.claude-sdk/ATLAS.md`** to orient yourself to the codebase
-2. **Check `.claude-sdk/memory/TASKS.md`** for any in-progress work
-3. **Review `.claude-sdk/CONTRACT.md`** for permissions and constraints
+1. **Read `.claude-sdk/ATLAS.md`** - Orient yourself to the codebase
+2. **Check `.claude-sdk/memory/TASKS.md`** - Any in-progress work?
+3. **Review `.claude-sdk/CONTRACT.md`** - What are your permissions?
+
+If the ATLAS.md says "not-yet-built", offer to build it (see below).
+
+---
+
+## Building the Atlas
+
+When asked to **"build the atlas"** or **"generate the atlas"**:
+
+1. Read `.claude-sdk/prompts/BUILD_ATLAS.md` for detailed instructions
+2. Explore the codebase structure
+3. Generate `.claude-sdk/ATLAS.md` (root index)
+4. Generate `.claude-sdk/atlas/*.atlas.md` (folder maps)
+
+The Atlas answers:
+- "What is this system?"
+- "Where should I look?"
+- "What matters?"
+- "What must NOT be broken?"
+
+When asked to **"refresh the atlas"**:
+1. Read `.claude-sdk/prompts/REFRESH_ATLAS.md`
+2. Update only what changed (preserve NOTES sections)
+
+---
 
 ## Before Modifying Code
 
 1. **Check `.claude-sdk/memory/INVARIANTS.md`** for safety constraints
 2. Respect all `INVARIANT:` and `PROTECTED:` entries
-3. If touching a protected path, mention it explicitly
+3. If touching a high-risk path, mention it explicitly
+
+---
 
 ## During Work
 
 ### Task Tracking
 
-When working on tasks, update `.claude-sdk/memory/TASKS.md`:
+Update `.claude-sdk/memory/TASKS.md`:
 - Set STATUS to `in_progress` when starting
 - Add files to `FILES_TOUCHED` as you modify them
-- Update `PROGRESS` checkboxes as you complete steps
+- Update `PROGRESS` checkboxes
 - Set STATUS to `completed` when done
 - For multi-session work, add a `SESSION:` log entry
 
 ### Decision Recording
 
-When making architectural decisions, add an ADR to `.claude-sdk/memory/DECISIONS.md`:
-- Use format: `ADR-XXX: [Title]`
-- Include STATUS, CONTEXT, DECISION, ALTERNATIVES
+For architectural decisions, add to `.claude-sdk/memory/DECISIONS.md`:
+```
+### ADR-XXX: [Title]
+STATUS: accepted
+DATE: YYYY-MM-DD
+CONTEXT: [Why needed]
+DECISION: [What decided]
+ALTERNATIVES: [What else considered]
+```
 
-### Atlas Maintenance
+### Discovering Invariants
 
-After significant structural changes:
-- Note that atlas may need refresh
-- Run `claude-sdk atlas refresh` if available
+If you discover rules like "all auth goes through X" or "never write directly to Y":
+- Add them to `.claude-sdk/memory/INVARIANTS.md`
+- Reference them in the relevant Atlas folder map
+
+---
 
 ## Permissions (from CONTRACT.md)
 
@@ -588,31 +655,269 @@ After significant structural changes:
 - Deleting files
 - Modifying configuration
 - Changes to PROTECTED paths
+- Large refactors
 
 **Prohibited**:
 - Direct commits to main
 - Modifying .env or secrets
 - Violating INVARIANTS.md
 
+---
+
 ## Quick Reference
 
 ```
 .claude-sdk/
-├── ATLAS.md              # READ FIRST - codebase overview
+├── ATLAS.md              # Codebase overview (READ FIRST)
 ├── CONTRACT.md           # Your permissions
-├── atlas/                # Per-folder details
-└── memory/
-    ├── DECISIONS.md      # Record decisions here
-    ├── INVARIANTS.md     # CHECK BEFORE EDITS
-    └── TASKS.md          # Track work here
+├── atlas/                # Per-folder maps
+├── memory/
+│   ├── DECISIONS.md      # Architecture decisions (ADRs)
+│   ├── INVARIANTS.md     # Safety constraints (CHECK BEFORE EDITS)
+│   └── TASKS.md          # Task tracking
+└── prompts/
+    ├── BUILD_ATLAS.md    # How to generate the atlas
+    └── REFRESH_ATLAS.md  # How to update the atlas
 ```
 
-## Available Skills
+---
 
-- **spec-generator**: Create specs/PRDs before implementation
-- **code-review**: Risk-aware code review
-- **debugging-playbook**: Systematic bug investigation
-- **repo-atlas**: Build/refresh codebase atlas
-- **search-helper**: Grep-based code navigation
+## Commands
+
+| User says | You do |
+|-----------|--------|
+| "build the atlas" | Read BUILD_ATLAS.md prompt, generate atlas |
+| "refresh the atlas" | Read REFRESH_ATLAS.md prompt, incremental update |
+| "what is this codebase?" | Read ATLAS.md, summarize |
+| "check for drift" | Compare ATLAS.md commit to current, report changes |
+EOF
+}
+
+create_build_atlas_prompt() {
+    local file="$1"
+
+    cat > "$file" <<'EOF'
+# Build Repo Atlas
+
+You are generating a **Repo Atlas** - a persistent, grep-friendly codebase index that helps agents (including yourself) re-orient quickly after context loss.
+
+## Core Purpose
+
+The Atlas answers these questions in SECONDS:
+1. **"What is this system?"** - Overview, purpose, architecture
+2. **"Where should I look?"** - Entry points, domains, folder purposes
+3. **"What matters?"** - Critical paths, hot files, integration points
+4. **"What must NOT be broken?"** - High-risk areas, invariants, protected paths
+
+This is NOT a search index. It's an ORIENTATION document.
+
+---
+
+## Step 1: Explore the Codebase
+
+```bash
+# Understand structure (ignore node_modules, dist, etc.)
+ls -la
+find . -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" -o -name "*.go" \) | grep -v node_modules | grep -v dist | head -50
+
+# Find entry points
+cat package.json 2>/dev/null | head -30
+ls src/ 2>/dev/null
+```
+
+Read key files to understand what this codebase DOES, not just what files exist.
+
+---
+
+## Step 2: Generate Root Atlas
+
+Create `.claude-sdk/ATLAS.md` with this EXACT format:
+
+```markdown
+# REPO ATLAS
+# Generated by Claude - Human-editable
+# Re-run "build the atlas" to refresh (preserves NOTES section)
+
+BUILT: [ISO timestamp]
+COMMIT: [git hash or "not-a-repo"]
+TYPE: [node|python|go|rust|java|mixed]
+
+## OVERVIEW
+
+PROJECT: [name]
+PURPOSE: [One sentence - what does this system DO?]
+ARCHITECTURE: [One sentence - key architectural pattern]
+
+## ENTRY POINTS
+
+# Where to start reading this codebase:
+ENTRY: [file] # [why this is an entry point]
+
+## MAJOR DOMAINS
+
+# Top-level organization - what are the major subsystems?
+DOMAIN: [path/] # [one-line purpose]
+
+## CRITICAL PATHS
+
+# Code that is high-risk, load-bearing, or frequently changed:
+CRITICAL: [path] # [why - e.g., "auth logic", "payment processing"]
+
+## CROSS-CUTTING CONCERNS
+
+# Where does logging, auth, error handling, etc. live?
+CONCERN: auth -> [path]
+CONCERN: logging -> [path]
+CONCERN: errors -> [path]
+
+## EXTERNAL INTEGRATIONS
+
+# What external services/APIs does this connect to?
+EXTERNAL: [service] # [where handled]
+
+## SEARCH ANCHORS
+
+# Grep patterns for navigating this codebase:
+GREP: "[pattern]" # [what it finds]
+
+## RELATED MEMORY
+
+DECISIONS: .claude-sdk/memory/DECISIONS.md
+INVARIANTS: .claude-sdk/memory/INVARIANTS.md
+TASKS: .claude-sdk/memory/TASKS.md
+CONTRACT: .claude-sdk/CONTRACT.md
+
+## NOTES
+
+[Add architectural notes, gotchas, tribal knowledge here.
+This section is preserved across rebuilds.]
+```
+
+---
+
+## Step 3: Generate Folder Maps
+
+For each MAJOR folder, create `.claude-sdk/atlas/[folder-name].atlas.md`:
+
+```markdown
+# FOLDER: [path]
+
+PURPOSE: [1-2 sentences - what does this folder DO?]
+LAYER: [presentation|business|data|infrastructure|test|config]
+RISK: [low|medium|high|critical]
+
+## KEY FILES
+
+FILE: [name] # [one-line purpose]
+
+## PUBLIC INTERFACE
+
+EXPORT: [symbol] # [what it does]
+ROUTE: [path] [METHOD] # [handler] (if applicable)
+
+## DEPENDENCIES
+
+DEPENDS_ON: [path] # [why]
+
+## INVARIANTS
+
+INVARIANT: [rule that must not be violated]
+
+## SEARCH ANCHORS
+
+GREP: "[pattern]" # [what it finds]
+
+## NOTES
+
+[Folder-specific notes]
+```
+
+---
+
+## Risk Assessment
+
+Mark as high-risk if involves:
+- **Authentication/Authorization** - RISK: critical
+- **Payment/Billing** - RISK: critical
+- **Data mutations** - RISK: high
+- **External APIs** - RISK: high
+- **Database schemas** - RISK: high
+
+---
+
+## Exclusions (NEVER index)
+
+- node_modules/, vendor/, .venv/
+- dist/, build/, target/
+- .git/, coverage/
+- .env, *.pem, *.key
+
+---
+
+## Format Rules
+
+1. **One concept per line** - No paragraphs
+2. **Deterministic prefixes** - ENTRY:, DOMAIN:, FILE:, EXPORT:, etc.
+3. **Grep-friendly** - `grep "^ROUTE:" ATLAS.md` should work
+4. **Minimal prose** - Save explanations for NOTES
+
+---
+
+## After Generation
+
+Tell the user:
+1. Atlas created at `.claude-sdk/ATLAS.md`
+2. Folder maps at `.claude-sdk/atlas/`
+3. Review and edit the NOTES sections
+4. Run "refresh the atlas" after major changes
+EOF
+}
+
+create_refresh_atlas_prompt() {
+    local file="$1"
+
+    cat > "$file" <<'EOF'
+# Refresh Repo Atlas
+
+Perform an INCREMENTAL update to the Repo Atlas.
+
+## Step 1: Check What Changed
+
+```bash
+# Get atlas build commit
+grep "^COMMIT:" .claude-sdk/ATLAS.md
+
+# Get current commit
+git rev-parse --short HEAD
+
+# Find changed files
+git diff --name-only [atlas-commit]..HEAD
+```
+
+## Step 2: Update Affected Folders
+
+For each folder with changes:
+1. Read existing `.claude-sdk/atlas/[folder].atlas.md`
+2. Re-analyze the folder
+3. Update FILE:, EXPORT:, ROUTE: entries
+4. **PRESERVE the NOTES section**
+
+## Step 3: Update Root Atlas
+
+1. Update BUILT: timestamp
+2. Update COMMIT: hash
+3. Add/remove DOMAIN: entries if needed
+4. **PRESERVE the NOTES section**
+
+## Step 4: Report Drift
+
+Warn if:
+- Folders in atlas no longer exist
+- New folders appeared
+- File counts changed dramatically
+
+## Format
+
+Keep all existing format rules - one concept per line, deterministic prefixes.
 EOF
 }

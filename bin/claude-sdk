@@ -5,7 +5,7 @@
 #
 set -euo pipefail
 
-SDK_VERSION="1.0.1"
+SDK_VERSION="1.0.2"
 
 # Resolve symlinks to find actual install location
 SOURCE="${BASH_SOURCE[0]}"

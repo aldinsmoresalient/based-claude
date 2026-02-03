@@ -1,6 +1,6 @@
 {
   "name": "based-claude",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A repo-owned, agent-native memory layer for Claude Code",
   "bin": {
     "based-claude": "./bin/claude-sdk"

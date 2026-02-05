@@ -1,6 +1,6 @@
 {
   "name": "based-claude",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "description": "Context-anchored memory layer for Claude Code - three anchors keep Claude oriented",
   "bin": {
     "based-claude": "./bin/claude-sdk"

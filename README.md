@@ -1,178 +1,201 @@
-# Based Claude
+# Based Claude v2
 
-A repo-owned, agent-native memory layer for Claude Code and similar agentic coding tools.
+Context-anchored memory layer for Claude Code. Three anchors keep Claude oriented no matter what task it's working on.
 
 ## The Problem
 
-AI coding assistants lose understanding across:
-- Context compactions
-- Session restarts
-- Agent switching
-- Long-running projects
+Claude Code is great at exploration, but:
+- **Greps something, jumps to conclusions** - finds one file, misses related context
+- **Partial understanding** - modifies code without knowing what depends on it
+- **Context loss** - forgets architectural decisions across sessions
+- **Blind spots** - doesn't know what it doesn't know
 
-Existing tools optimize for *retrieval*, not *persistent understanding*.
+## The Solution: Three Anchors
 
-## The Solution
-
-The Claude Code Starter SDK provides:
-
-- **CLAUDE.md**: Agent instructions that Claude Code reads automatically
-- **Repo Atlas**: Grep-friendly codebase index for rapid re-orientation
-- **Decision Memory**: Lightweight ADRs capturing architectural decisions
-- **Invariants Registry**: Safety constraints agents must respect
-- **Task Memory**: Multi-session work tracking
-- **Claude Contract**: Explicit permissions and boundaries
-
-All artifacts are human-readable, version-controllable, and repo-owned.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ANCHOR 1: CLAUDE.md                                             │
+│  - Auto-loaded on session start                                  │
+│  - Contains: domains, cross-references, invariants               │
+│  - Points to generated skills                                    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  ANCHOR 2: Generated Skills (.claude/skills/)                    │
+│  - Created during annotation, specific to YOUR codebase          │
+│  - /modify-auth → checklist for auth changes                     │
+│  - /modify-db → database change workflow                         │
+│  - Loaded when needed, focused context                           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  ANCHOR 3: @claude Headers (in code files)                       │
+│  - PURPOSE: what this file does                                  │
+│  - RISK: how dangerous to modify                                 │
+│  - USED_BY: what depends on this (BLAST RADIUS)                  │
+│  - Lives with code, can't drift                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Installation
 
-### Option 1: One-Line Install (Recommended)
-
 ```bash
-# Clone and install globally
-git clone https://github.com/aldinsmoresalient/based-claude.git
-cd claude-code-sdk
-chmod +x bin/claude-sdk install.sh
-./install.sh --global
+npx based-claude init
 ```
 
-### Option 2: Direct Use
+That's it. Creates `CLAUDE.md` and `.claude/skills/` directory.
+
+## Workflow
+
+### 1. Initialize
 
 ```bash
-# Clone the SDK
-git clone https://github.com/aldinsmoresalient/based-claude.git
-
-# Initialize in your project
-cd your-project
-/path/to/claude-code-sdk/bin/claude-sdk init
+npx based-claude init
 ```
 
-### Option 3: Claude Code Plugin (Skills Only)
+### 2. Annotate (tell Claude)
 
-```bash
-# In Claude Code:
-/plugin marketplace add aldinsmoresalient/based-claude
-/plugin install engineering-skills@claude-code-sdk
+```
+You: "annotate this codebase"
 ```
 
-## Quick Start
+Claude will:
+1. Explore your codebase structure
+2. Build an import graph (discover what depends on what)
+3. Add `@claude` headers to key files (with USED_BY for blast radius)
+4. Generate domain-specific skills in `.claude/skills/`
+5. Complete the atlas in `CLAUDE.md`
 
-```bash
-# 1. Initialize your project
-cd your-project
-claude-sdk init
+### 3. Work with Context
 
-# 2. Build the repo atlas
-claude-sdk atlas build
+Now when Claude works on your codebase:
 
-# 3. Start using Claude Code
-# Claude will automatically read CLAUDE.md!
 ```
+Task: "Fix the login bug"
+  ↓
+CLAUDE.md: "auth is CRITICAL, check /modify-auth skill"
+  ↓
+/modify-auth skill: "files to check, invariants, test commands"
+  ↓
+@claude header: "USED_BY: api/auth-routes.ts, middleware/auth.ts"
+  ↓
+Claude makes changes, verifies consumers
+```
+
+Context stays anchored at every step.
+
+## The Key Innovation: USED_BY
+
+Most tools track what a file imports. We track **what imports it**.
+
+```typescript
+/**
+ * @claude
+ * PURPOSE: User login - validates credentials, creates session
+ * RISK: critical
+ * USED_BY: src/api/auth-routes.ts, src/middleware/auth.ts
+ * DEPENDS: src/db/users.ts, src/crypto/hash.ts
+ */
+```
+
+**USED_BY is the blast radius.** When Claude modifies this file, it knows to check those consumers.
+
+## Generated Skills
+
+Unlike generic skills, these are **generated from your actual codebase**:
+
+```markdown
+---
+name: modify-auth
+description: Use when modifying any code in src/auth/. This is CRITICAL risk code.
+---
+
+# Modifying Auth Code
+
+## Files in This Domain
+
+| File | Purpose | USED_BY |
+|------|---------|---------|
+| login.ts | User login flow | api/auth-routes.ts, middleware/auth.ts |
+| session.ts | Session management | middleware/auth.ts |
+
+## Invariants
+
+- Passwords only via bcrypt.compare()
+- Never log credentials or session tokens
+
+## After Changes
+
+1. Run: `npm test -- --grep auth`
+2. Verify: src/api/auth-routes.ts still works
+```
+
+Skills are created during annotation based on what Claude discovers about your codebase.
 
 ## What Gets Created
 
-After `claude-sdk init`, your project has:
-
 ```
 your-project/
-├── CLAUDE.md                 # Agent instructions (Claude reads this!)
-└── .claude-sdk/
-    ├── ATLAS.md              # Codebase overview
-    ├── CONTRACT.md           # Agent permissions
-    ├── atlas/                # Per-folder maps
-    └── memory/
-        ├── DECISIONS.md      # Architecture decisions (ADRs)
-        ├── INVARIANTS.md     # Safety constraints
-        └── TASKS.md          # Task tracking
+├── CLAUDE.md              # Anchor 1: Atlas + instructions (auto-loaded)
+├── .claude/
+│   └── skills/            # Anchor 2: Generated skills
+│       ├── modify-auth.md
+│       ├── modify-db.md
+│       └── add-endpoint.md
+└── src/
+    └── auth/
+        └── login.ts       # Anchor 3: @claude header with USED_BY
 ```
 
-## How It Works
+## Commands
 
-### CLAUDE.md (The Key)
+| Command | Description |
+|---------|-------------|
+| `based-claude init` | Initialize CLAUDE.md and skills directory |
+| `based-claude doctor` | Check health, detect drift |
 
-The `CLAUDE.md` file in your project root is automatically read by Claude Code. It instructs Claude to:
+After init, all other commands are natural language to Claude:
+- "annotate this codebase" - Build the three anchors
+- "refresh the atlas" - Update after major changes
+- "check for drift" - Verify atlas matches current code
 
-1. **On session start**: Read the Atlas and check for in-progress tasks
-2. **Before modifying code**: Check invariants and protected paths
-3. **During work**: Update task progress and record decisions
-4. **After changes**: Note if atlas needs refresh
-
-### Memory Files
-
-| File | Purpose | Updated By |
-|------|---------|------------|
-| `ATLAS.md` | Codebase structure overview | `claude-sdk atlas build` |
-| `CONTRACT.md` | Permissions and boundaries | Human |
-| `DECISIONS.md` | Architecture decisions | Human + Agent |
-| `INVARIANTS.md` | Safety constraints | Human |
-| `TASKS.md` | Work tracking | Human + Agent |
-
-## Skills Included
-
-| Skill | Description |
-|-------|-------------|
-| `spec-generator` | Create structured specs and PRDs |
-| `code-review` | Risk-aware code review |
-| `debugging-playbook` | Systematic debugging approaches |
-| `repo-atlas` | Build and maintain codebase atlas |
-| `search-helper` | Grep-oriented code navigation |
-
-## Subagents Included
-
-| Agent | Role | Tools |
-|-------|------|-------|
-| `planner` | Task decomposition | Read, Search |
-| `reviewer` | Risk-focused review | Read, Search |
-| `indexer` | Atlas maintenance | Read, Search, Write to .claude-sdk/ |
-
-## CLI Commands
+## CLI Options
 
 ```bash
-claude-sdk init               # Initialize project (creates CLAUDE.md + memory)
-claude-sdk atlas build        # Build repo atlas
-claude-sdk atlas refresh      # Incremental update
-claude-sdk atlas status       # Check freshness
-claude-sdk doctor             # Validate installation
-claude-sdk install --global   # Install SDK globally
-claude-sdk uninstall          # Remove installation
+# Initialize
+based-claude init
+based-claude init --force  # Overwrite existing
+
+# Health check
+based-claude doctor
+based-claude doctor --verbose
 ```
 
-## Deployment Options
+## How It Helps Claude
 
-### For Teams
-
-1. **Include in your repo**: Commit `.claude-sdk/` and `CLAUDE.md` to version control
-2. **Share templates**: Customize `CONTRACT.md` and `INVARIANTS.md` for your team's standards
-3. **CI integration**: Run `claude-sdk atlas status` to catch stale indexes
-
-### For Distribution
-
-1. **GitHub**: Publish the SDK repo, users clone and run `install.sh`
-2. **Plugin Marketplace**: Skills available via Claude Code plugin system
-3. **npm** (coming soon): `npx claude-code-sdk init`
-
-## Documentation
-
-- [Quickstart](docs/QUICKSTART.md) - Get started in 5 minutes
-- [CLI Reference](docs/CLI.md) - Full command documentation
-- [Atlas Guide](docs/ATLAS.md) - Understanding the Repo Atlas
-- [Customization](docs/CUSTOMIZATION.md) - Configure for your project
+| Without Based Claude | With Based Claude |
+|---------------------|-------------------|
+| Greps, finds one file, misses context | Cross-references show related files |
+| Modifies code, breaks consumers | USED_BY shows blast radius |
+| Generic understanding | Domain-specific skills with checklists |
+| Rediscovers architecture each session | CLAUDE.md auto-loaded with overview |
+| Misses implicit rules | Invariants documented and checked |
 
 ## Design Principles
 
-1. **Agent-aware**: CLAUDE.md gives agents instructions automatically
-2. **Repo-owned**: All artifacts in version control, not hidden indexes
-3. **Human-readable**: Plain markdown, grep-friendly format
-4. **Safe by default**: Backups, invariants, protected paths
-5. **Session-resilient**: Memory survives context loss
+1. **Context anchoring** - Multiple layers keep Claude oriented
+2. **Blast radius awareness** - USED_BY prevents breaking changes
+3. **Generated, not generic** - Skills come from YOUR codebase
+4. **Lives with code** - Headers can't drift from reality
+5. **Minimal footprint** - Just CLAUDE.md + skills directory
 
 ## Requirements
 
 - macOS or Linux
-- Bash 4.0+
-- jq (recommended)
-- git (for atlas freshness tracking)
+- Node.js 14+ (for npx)
+- git (for commit tracking)
 
 ## License
 

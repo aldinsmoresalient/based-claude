@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 #
-# Based Claude - Main CLI Entry Point
-# A repo-owned, agent-native memory layer for Claude Code
+# Based Claude v2 - CLI Entry Point
+# Context-anchored memory layer for Claude Code
 #
 set -euo pipefail
-
-SDK_VERSION="1.0.2"
 
 # Resolve symlinks to find actual install location
 SOURCE="${BASH_SOURCE[0]}"
@@ -15,6 +13,9 @@ while [ -L "$SOURCE" ]; do
     [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 SDK_ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+
+# Single-source version from package.json
+SDK_VERSION=$(grep '"version"' "$SDK_ROOT/package.json" | head -1 | sed 's/.*"version": *"//;s/".*//')
 
 # Source common utilities
 source "$SDK_ROOT/cli/lib/common.sh"
@@ -26,45 +27,44 @@ usage() {
     cat <<EOF
 Based Claude v${SDK_VERSION}
 
-A repo-owned, agent-native memory layer that survives across sessions,
-encodes architectural intent, and helps agents re-orient in seconds.
+Context-anchored memory layer for Claude Code.
+Three anchors keep Claude oriented: CLAUDE.md, Generated Skills, @claude Headers.
 
 USAGE:
-    claude-sdk <command> [options]
+    based-claude <command> [options]
 
 COMMANDS:
-    install     Install SDK (global or project-level)
-    uninstall   Remove SDK installation
-    doctor      Validate installation and configuration
-    atlas       Manage Repo Atlas (build, refresh, status)
-    init        Initialize memory files in current project
+    init        Initialize CLAUDE.md in current project
+    doctor      Validate installation and check for drift
+    list        Show installed skills
+    sync        Install skills from team skillfile (.claude-skills.json)
+    sync init   Create a starter team skillfile
 
 OPTIONS:
     -h, --help      Show this help message
     -v, --version   Show version
-    --dry-run       Preview changes without applying them
+
+WORKFLOW:
+    1. Run: based-claude init
+    2. Tell Claude: "annotate this codebase"
+    3. Claude will:
+       - Add @claude headers to key files (with USED_BY for blast radius)
+       - Generate domain-specific skills in .claude/skills/
+       - Complete the atlas in CLAUDE.md
+
+    Then when working:
+    - Claude reads CLAUDE.md (auto-loaded)
+    - Invokes generated skills for domain-specific context
+    - Checks @claude headers for blast radius before modifying files
 
 EXAMPLES:
-    # Install globally (user-level)
-    claude-sdk install --global
-
-    # Install for current project
-    claude-sdk install --project
-
-    # Preview what install would do
-    claude-sdk install --project --dry-run
-
-    # Build repo atlas
-    claude-sdk atlas build
-
-    # Initialize memory files
-    claude-sdk init
+    # Initialize in current project
+    based-claude init
 
     # Check installation health
-    claude-sdk doctor
+    based-claude doctor
 
-For detailed documentation:
-    claude-sdk help <command>
+For more information: https://github.com/anthropics/based-claude
 
 EOF
 }
@@ -73,39 +73,7 @@ EOF
 # Version
 #───────────────────────────────────────────────────────────────────────────────
 version() {
-    echo "claude-sdk version $SDK_VERSION"
-}
-
-#───────────────────────────────────────────────────────────────────────────────
-# Help for specific command
-#───────────────────────────────────────────────────────────────────────────────
-help_command() {
-    local cmd="${1:-}"
-    case "$cmd" in
-        install)
-            source "$SDK_ROOT/cli/install.sh"
-            install_help
-            ;;
-        uninstall)
-            source "$SDK_ROOT/cli/uninstall.sh"
-            uninstall_help
-            ;;
-        doctor)
-            source "$SDK_ROOT/cli/doctor.sh"
-            doctor_help
-            ;;
-        atlas)
-            source "$SDK_ROOT/cli/atlas.sh"
-            atlas_help
-            ;;
-        init)
-            source "$SDK_ROOT/cli/init.sh"
-            init_help
-            ;;
-        *)
-            usage
-            ;;
-    esac
+    echo "based-claude version $SDK_VERSION"
 }
 
 #───────────────────────────────────────────────────────────────────────────────
@@ -116,28 +84,21 @@ main() {
     shift || true
 
     case "$cmd" in
-        install)
-            source "$SDK_ROOT/cli/install.sh"
-            cmd_install "$@"
-            ;;
-        uninstall)
-            source "$SDK_ROOT/cli/uninstall.sh"
-            cmd_uninstall "$@"
+        init)
+            source "$SDK_ROOT/cli/init.sh"
+            cmd_init "$@"
             ;;
         doctor)
             source "$SDK_ROOT/cli/doctor.sh"
             cmd_doctor "$@"
             ;;
-        atlas)
-            source "$SDK_ROOT/cli/atlas.sh"
-            cmd_atlas "$@"
+        list)
+            source "$SDK_ROOT/cli/list.sh"
+            cmd_list "$@"
             ;;
-        init)
-            source "$SDK_ROOT/cli/init.sh"
-            cmd_init "$@"
-            ;;
-        help)
-            help_command "$@"
+        sync)
+            source "$SDK_ROOT/cli/sync.sh"
+            cmd_sync "$@"
             ;;
         -h|--help|"")
             usage

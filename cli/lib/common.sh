@@ -74,7 +74,6 @@ dry_run_msg() {
 # Path utilities
 #───────────────────────────────────────────────────────────────────────────────
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
-CLAUDE_SDK_MANIFEST="$CLAUDE_HOME/.sdk-manifest.json"
 
 # Get project root (where .git is, or current dir)
 get_project_root() {
@@ -88,13 +87,6 @@ get_project_root() {
     done
     # No git root found, use current directory
     pwd
-}
-
-# Get the .claude-sdk directory for a project
-get_project_sdk_dir() {
-    local project_root
-    project_root="$(get_project_root)"
-    echo "$project_root/.claude-sdk"
 }
 
 # Ensure directory exists
@@ -114,103 +106,6 @@ file_exists() {
     [[ -f "$1" && -s "$1" ]]
 }
 
-# Safe copy with backup
-safe_copy() {
-    local src="$1"
-    local dest="$2"
-    local backup_dir="${3:-}"
-
-    if [[ -f "$dest" ]]; then
-        if [[ -n "$backup_dir" ]]; then
-            ensure_dir "$backup_dir"
-            local backup_name
-            backup_name="$(basename "$dest").$(date +%Y%m%d_%H%M%S).bak"
-            cp "$dest" "$backup_dir/$backup_name"
-            debug "Backed up $dest to $backup_dir/$backup_name"
-        fi
-    fi
-
-    cp "$src" "$dest"
-}
-
-# Merge JSON files (simple append to arrays)
-merge_json_array() {
-    local base="$1"
-    local addition="$2"
-    local key="$3"
-
-    if command -v jq &>/dev/null; then
-        jq -s ".[0].$key + .[1].$key | unique" "$base" "$addition"
-    else
-        warn "jq not installed, cannot merge JSON"
-        return 1
-    fi
-}
-
-#───────────────────────────────────────────────────────────────────────────────
-# Manifest operations
-#───────────────────────────────────────────────────────────────────────────────
-
-# Initialize manifest
-init_manifest() {
-    local manifest_path="$1"
-    local install_type="$2"  # "global" or "project"
-    local target_path="$3"
-
-    ensure_dir "$(dirname "$manifest_path")"
-
-    cat > "$manifest_path" <<EOF
-{
-    "version": "$SDK_VERSION",
-    "install_type": "$install_type",
-    "install_path": "$target_path",
-    "install_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-    "files_installed": [],
-    "backups_created": [],
-    "settings_modified": []
-}
-EOF
-}
-
-# Add file to manifest
-manifest_add_file() {
-    local manifest_path="$1"
-    local file_path="$2"
-    local file_type="$3"  # "skill", "subagent", "template", "config"
-
-    if command -v jq &>/dev/null; then
-        local tmp
-        tmp=$(mktemp)
-        jq --arg path "$file_path" --arg type "$file_type" \
-            '.files_installed += [{"path": $path, "type": $type}]' \
-            "$manifest_path" > "$tmp" && mv "$tmp" "$manifest_path"
-    fi
-}
-
-# Add backup to manifest
-manifest_add_backup() {
-    local manifest_path="$1"
-    local original_path="$2"
-    local backup_path="$3"
-
-    if command -v jq &>/dev/null; then
-        local tmp
-        tmp=$(mktemp)
-        jq --arg orig "$original_path" --arg backup "$backup_path" \
-            '.backups_created += [{"original": $orig, "backup": $backup}]' \
-            "$manifest_path" > "$tmp" && mv "$tmp" "$manifest_path"
-    fi
-}
-
-# Read manifest
-read_manifest() {
-    local manifest_path="$1"
-    if [[ -f "$manifest_path" ]]; then
-        cat "$manifest_path"
-    else
-        echo "{}"
-    fi
-}
 
 #───────────────────────────────────────────────────────────────────────────────
 # Validation utilities
@@ -245,65 +140,47 @@ get_git_hash() {
 }
 
 #───────────────────────────────────────────────────────────────────────────────
-# User interaction
+# Skill utilities
 #───────────────────────────────────────────────────────────────────────────────
 
-# Confirm action (returns 0 for yes, 1 for no)
-confirm() {
-    local prompt="${1:-Continue?}"
-    local default="${2:-n}"
-
-    local yn
-    if [[ "$default" == "y" ]]; then
-        read -r -p "$prompt [Y/n] " yn
-        yn="${yn:-y}"
-    else
-        read -r -p "$prompt [y/N] " yn
-        yn="${yn:-n}"
-    fi
-
-    case "$yn" in
-        [Yy]*) return 0 ;;
-        *) return 1 ;;
-    esac
+# Read a field from SKILL.md YAML frontmatter
+# Usage: read_skill_field /path/to/SKILL.md "name"
+read_skill_field() {
+    local skill_file="$1"
+    local field="$2"
+    grep "^${field}:" "$skill_file" 2>/dev/null | sed "s/^${field}:[[:space:]]*//" | sed 's/^["'\'']//' | sed 's/["'\'']*$//'
 }
 
-#───────────────────────────────────────────────────────────────────────────────
-# Summary printing
-#───────────────────────────────────────────────────────────────────────────────
+# Validate a single SKILL.md file, returns 0 if valid
+validate_skill_file() {
+    local skill_file="$1"
+    [[ -f "$skill_file" && -s "$skill_file" ]] || return 1
+    head -1 "$skill_file" | grep -q "^---$" || return 1
+    grep -q "^name:" "$skill_file" && grep -q "^description:" "$skill_file"
+}
 
-# Print installation summary
-print_install_summary() {
-    local install_type="$1"
-    local target_path="$2"
-    local skills_count="$3"
-    local subagents_count="$4"
+# Iterate over all installed skills (directory-based and flat .md)
+# Calls the provided callback with: skill_dir skill_file skill_name
+for_each_skill() {
+    local skills_dir="$1"
+    local callback="$2"
 
-    header "Installation Summary"
-    echo ""
-    echo "  Type:       $install_type"
-    echo "  Location:   $target_path"
-    echo "  Skills:     $skills_count installed"
-    echo "  Subagents:  $subagents_count installed"
-    echo ""
-    echo -e "${GREEN}Installation complete!${NC}"
-    echo ""
+    # Directory-based skills: skill-name/SKILL.md
+    for dir in "$skills_dir"/*/; do
+        [[ -d "$dir" ]] || continue
+        local skill_file="$dir/SKILL.md"
+        if [[ -f "$skill_file" ]]; then
+            local skill_name
+            skill_name=$(basename "$dir")
+            "$callback" "$dir" "$skill_file" "$skill_name"
+        fi
+    done
 
-    if [[ "$install_type" == "global" ]]; then
-        echo "Next steps:"
-        echo "  1. Navigate to your project: cd your-project"
-        echo "  2. Initialize the memory layer: claude-sdk init"
-        echo "  3. Build the repo atlas: claude-sdk atlas build"
-        echo ""
-    else
-        echo "What was created:"
-        echo "  - CLAUDE.md: Agent instructions (Claude Code reads this automatically)"
-        echo "  - .claude-sdk/: Memory layer (atlas, decisions, invariants, tasks)"
-        echo ""
-        echo "Next steps:"
-        echo "  1. Run 'claude-sdk atlas build' to generate the Repo Atlas"
-        echo "  2. Edit CONTRACT.md to customize agent permissions"
-        echo "  3. Start using Claude Code - it will read CLAUDE.md automatically!"
-        echo ""
-    fi
+    # Flat .md skills (legacy): skill-name.md
+    for skill_file in "$skills_dir"/*.md; do
+        [[ -f "$skill_file" ]] || continue
+        local skill_name
+        skill_name=$(basename "$skill_file" .md)
+        "$callback" "$(dirname "$skill_file")" "$skill_file" "$skill_name"
+    done
 }

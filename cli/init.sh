@@ -1,76 +1,48 @@
 #!/usr/bin/env bash
 #
-# Claude Code SDK - Init Command
-# Initialize memory files in current project
+# Based Claude v2 - Init Command
+# Creates CLAUDE.md with atlas structure and skill generation instructions
 #
 
 init_help() {
     cat <<EOF
-claude-sdk init - Initialize memory files in current project
+based-claude init - Initialize Based Claude in current project
 
 USAGE:
-    claude-sdk init [options]
+    based-claude init [options]
 
 OPTIONS:
-    --all           Initialize all memory files
-    --atlas         Initialize atlas structure only
-    --memory        Initialize memory files only
-    --contract      Initialize Claude contract only
     --dry-run       Preview changes
     --force         Overwrite existing files
     -h, --help      Show this help
 
 DESCRIPTION:
-    Initializes the project memory system:
-    - CLAUDE.md - Agent instructions (project root)
-    - .claude-sdk/ATLAS.md - Repo atlas (auto-generated)
-    - .claude-sdk/memory/DECISIONS.md - Decision records (ADRs)
-    - .claude-sdk/memory/INVARIANTS.md - Safety invariants
-    - .claude-sdk/memory/TASKS.md - Task tracking
-    - .claude-sdk/CONTRACT.md - Agent behavior contract
+    Creates CLAUDE.md with:
+    - Atlas structure (domains, cross-references)
+    - Invariants section
+    - Skills index
+    - Annotation workflow instructions
 
-    Existing files are never overwritten without --force.
+    After init, ask Claude to "annotate this codebase" to:
+    1. Build the import graph (discover USED_BY)
+    2. Add @claude headers to key files
+    3. Generate domain-specific skills
+    4. Complete the atlas
 
 EXAMPLES:
-    # Initialize everything
-    claude-sdk init --all
-
-    # Initialize just memory files
-    claude-sdk init --memory
-
-    # Preview what would be created
-    claude-sdk init --all --dry-run
+    based-claude init
+    based-claude init --dry-run
+    based-claude init --force
 
 EOF
 }
 
 cmd_init() {
-    local init_all=false
-    local init_atlas=false
-    local init_memory=false
-    local init_contract=false
     local dry_run=false
     local force=false
 
-    # Parse arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --all)
-                init_all=true
-                shift
-                ;;
-            --atlas)
-                init_atlas=true
-                shift
-                ;;
-            --memory)
-                init_memory=true
-                shift
-                ;;
-            --contract)
-                init_contract=true
-                shift
-                ;;
             --dry-run)
                 dry_run=true
                 shift
@@ -91,22 +63,21 @@ cmd_init() {
         esac
     done
 
-    # Default to all if nothing specified
-    if ! $init_all && ! $init_atlas && ! $init_memory && ! $init_contract; then
-        init_all=true
-    fi
-
-    if $init_all; then
-        init_atlas=true
-        init_memory=true
-        init_contract=true
-    fi
-
     local project_root
     project_root=$(get_project_root)
-    local sdk_dir="$project_root/.claude-sdk"
+    local claude_file="$project_root/CLAUDE.md"
+    local skills_dir="$project_root/.claude/skills"
 
-    header "Initializing Project Memory"
+    # Welcome message
+    echo ""
+    echo -e "${BOLD}Based Claude${NC} - Context-anchored memory for Claude Code"
+    echo ""
+    echo "  Keeps Claude oriented with three anchors:"
+    echo "  • CLAUDE.md - Auto-loaded atlas with domains & invariants"
+    echo "  • Generated Skills - Domain-specific checklists"
+    echo "  • @claude Headers - Blast radius tracking (USED_BY)"
+    echo ""
+    header "Initializing"
     echo ""
     echo "Project: $project_root"
     echo ""
@@ -116,808 +87,303 @@ cmd_init() {
         echo ""
     fi
 
-    local created_count=0
-
-    # Create SDK directory
-    if ! $dry_run; then
-        ensure_dir "$sdk_dir"
-        ensure_dir "$sdk_dir/memory"
-        ensure_dir "$sdk_dir/atlas"
-        ensure_dir "$sdk_dir/prompts"
-    fi
-
-    # Initialize atlas structure
-    if $init_atlas; then
-        step 1 "Initializing atlas..."
-        local atlas_file="$sdk_dir/ATLAS.md"
-
-        if [[ -f "$atlas_file" ]] && ! $force; then
-            info "  ATLAS.md exists (use --force to overwrite)"
-        else
-            if $dry_run; then
-                dry_run_msg "Create $atlas_file"
-            else
-                create_atlas_template "$atlas_file" "$project_root"
-                info "  Created: ATLAS.md"
-                ((created_count++))
-            fi
-        fi
-    fi
-
-    # Initialize memory files
-    if $init_memory; then
-        step 2 "Initializing memory files..."
-
-        # DECISIONS.md (ADR)
-        local decisions_file="$sdk_dir/memory/DECISIONS.md"
-        if [[ -f "$decisions_file" ]] && ! $force; then
-            info "  DECISIONS.md exists"
-        else
-            if $dry_run; then
-                dry_run_msg "Create $decisions_file"
-            else
-                create_decisions_template "$decisions_file"
-                info "  Created: memory/DECISIONS.md"
-                ((created_count++))
-            fi
-        fi
-
-        # INVARIANTS.md
-        local invariants_file="$sdk_dir/memory/INVARIANTS.md"
-        if [[ -f "$invariants_file" ]] && ! $force; then
-            info "  INVARIANTS.md exists"
-        else
-            if $dry_run; then
-                dry_run_msg "Create $invariants_file"
-            else
-                create_invariants_template "$invariants_file"
-                info "  Created: memory/INVARIANTS.md"
-                ((created_count++))
-            fi
-        fi
-
-        # TASKS.md
-        local tasks_file="$sdk_dir/memory/TASKS.md"
-        if [[ -f "$tasks_file" ]] && ! $force; then
-            info "  TASKS.md exists"
-        else
-            if $dry_run; then
-                dry_run_msg "Create $tasks_file"
-            else
-                create_tasks_template "$tasks_file"
-                info "  Created: memory/TASKS.md"
-                ((created_count++))
-            fi
-        fi
-    fi
-
-    # Initialize contract
-    if $init_contract; then
-        step 3 "Initializing Claude contract..."
-        local contract_file="$sdk_dir/CONTRACT.md"
-
-        if [[ -f "$contract_file" ]] && ! $force; then
-            info "  CONTRACT.md exists"
-        else
-            if $dry_run; then
-                dry_run_msg "Create $contract_file"
-            else
-                create_contract_template "$contract_file"
-                info "  Created: CONTRACT.md"
-                ((created_count++))
-            fi
-        fi
-    fi
-
-    # Initialize prompts
-    step 4 "Initializing prompts..."
-
-    local build_prompt="$sdk_dir/prompts/BUILD_ATLAS.md"
-    if [[ ! -f "$build_prompt" ]] || $force; then
-        if $dry_run; then
-            dry_run_msg "Create $build_prompt"
-        else
-            create_build_atlas_prompt "$build_prompt"
-            info "  Created: prompts/BUILD_ATLAS.md"
-            ((created_count++))
-        fi
-    else
-        info "  BUILD_ATLAS.md exists"
-    fi
-
-    local refresh_prompt="$sdk_dir/prompts/REFRESH_ATLAS.md"
-    if [[ ! -f "$refresh_prompt" ]] || $force; then
-        if $dry_run; then
-            dry_run_msg "Create $refresh_prompt"
-        else
-            create_refresh_atlas_prompt "$refresh_prompt"
-            info "  Created: prompts/REFRESH_ATLAS.md"
-            ((created_count++))
-        fi
-    else
-        info "  REFRESH_ATLAS.md exists"
-    fi
-
-    # Initialize CLAUDE.md (agent instructions) in project root
-    step 5 "Initializing agent instructions..."
-    local claude_file="$project_root/CLAUDE.md"
-
+    # Check existing
     if [[ -f "$claude_file" ]] && ! $force; then
-        info "  CLAUDE.md exists (use --force to overwrite)"
-    else
-        if $dry_run; then
-            dry_run_msg "Create $claude_file"
-        else
-            create_claude_instructions "$claude_file"
-            info "  Created: CLAUDE.md (agent instructions)"
-            ((created_count++))
-        fi
+        warn "CLAUDE.md already exists"
+        echo "Use --force to overwrite"
+        return 1
     fi
 
-    # Create .gitignore for SDK directory
-    local gitignore_file="$sdk_dir/.gitignore"
-    if [[ ! -f "$gitignore_file" ]] && ! $dry_run; then
-        cat > "$gitignore_file" <<EOF
-# Claude Code SDK
-# By default, memory files are NOT ignored (they should be versioned)
-# Uncomment below to exclude specific files from version control
-
-# .backups/
-# *.bak
-EOF
-    fi
-
-    # Summary
-    echo ""
     if $dry_run; then
-        echo -e "${YELLOW}DRY-RUN complete${NC}"
+        dry_run_msg "Create $claude_file"
+        dry_run_msg "Create $skills_dir/"
+        dry_run_msg "Create $skills_dir/skill-creator.md"
+        echo ""
+        echo "Would create CLAUDE.md, .claude/skills/, and default skill"
     else
-        if [[ $created_count -gt 0 ]]; then
-            success "Created $created_count files"
-            echo ""
-            echo "Next steps:"
-            echo "  1. Edit CONTRACT.md to set agent permissions"
-            echo "  2. Run 'claude-sdk atlas build' to generate the atlas"
-            echo "  3. Start recording decisions in DECISIONS.md"
-        else
-            echo "No new files created (all exist)"
+        # Create CLAUDE.md
+        create_claude_md "$claude_file" "$project_root"
+
+        # Create skills directory
+        ensure_dir "$skills_dir"
+
+        # Copy default skill-creator skill (as directory with SKILL.md)
+        local default_skills_dir="$SDK_ROOT/cli/skills"
+        if [[ -d "$default_skills_dir/skill-creator" ]]; then
+            cp -r "$default_skills_dir/skill-creator" "$skills_dir/"
         fi
+
+        success "Created CLAUDE.md"
+        success "Created .claude/skills/"
+        success "Installed skill: skill-creator/"
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo -e "${BOLD}Next Step:${NC} Open Claude Code and say:"
+        echo ""
+        echo -e "  ${CYAN}\"annotate this codebase\"${NC}"
+        echo ""
+        echo "Claude will then:"
+        echo "  • Explore your codebase structure"
+        echo "  • Add @claude headers to key files"
+        echo "  • Generate domain-specific skills"
+        echo "  • Complete the atlas in CLAUDE.md"
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     fi
 }
 
-#───────────────────────────────────────────────────────────────────────────────
-# Template creation functions
-#───────────────────────────────────────────────────────────────────────────────
-
-create_atlas_template() {
+create_claude_md() {
     local file="$1"
     local project_root="$2"
+    local project_name
+    project_name=$(basename "$project_root")
 
-    cat > "$file" <<'EOF'
-# REPO ATLAS
-# Human-editable codebase index for agent orientation
-# Run 'claude-sdk atlas build' to auto-generate, or edit manually
+    cat > "$file" << 'CLAUDEMD'
+<!--
+IMPORTANT FOR CLAUDE: Check the BUILT field at the bottom of this file.
+If it says "not-yet-annotated", proactively tell the user:
 
-BUILT: not-yet-built
-COMMIT: unknown
-TYPE: unknown
+"I see this codebase uses Based Claude but hasn't been annotated yet.
+Would you like me to annotate it now? This will:
+• Add @claude headers to key files (for blast radius tracking)
+• Generate domain-specific skills
+• Complete the atlas in this file
 
-## OVERVIEW
-
-PROJECT: [Project name]
-PURPOSE: [One-line description]
-
-## ENTRY POINTS
-
-# Primary entry points for understanding this codebase:
-ENTRY: [main entry file]
-
-## MAJOR DOMAINS
-
-# Top-level organization:
-DOMAIN: src/           # [description]
-
-## ARCHITECTURE
-
-# Key architectural decisions:
-# - [Decision 1]
-# - [Decision 2]
-
-## SEARCH ANCHORS
-
-# Useful grep patterns:
-GREP: "TODO|FIXME" - Find todos
-GREP: "export (function|const|class)" - Find exports
-
-## NOTES
-
-Add architectural notes, gotchas, or important context here.
-This section is preserved across atlas rebuilds.
-EOF
-}
-
-create_decisions_template() {
-    local file="$1"
-
-    cat > "$file" <<'EOF'
-# Decision Memory (ADRs)
-# Lightweight Architecture Decision Records
-# Format: grep-friendly, human-editable
-
-## Active Decisions
-
-### ADR-001: [Title]
-
-STATUS: proposed | accepted | deprecated | superseded
-DATE: YYYY-MM-DD
-CONTEXT: [Why this decision was needed]
-DECISION: [What was decided]
-ALTERNATIVES: [What else was considered]
-CONSTRAINTS: [What limitations affected the decision]
-REVISIT_IF: [Conditions that would trigger reconsideration]
-
----
-
-## Decision Index
-
-# Quick reference for all decisions:
-ADR: 001 - [Title] - STATUS
-
-## Templates
-
-<!-- Copy this template for new decisions:
-
-### ADR-XXX: [Title]
-
-STATUS: proposed
-DATE: YYYY-MM-DD
-CONTEXT:
-DECISION:
-ALTERNATIVES:
-CONSTRAINTS:
-REVISIT_IF:
-
+Just say 'yes' or 'annotate this codebase' to get started."
 -->
-EOF
-}
 
-create_invariants_template() {
-    local file="$1"
+# Project Name
 
-    cat > "$file" <<'EOF'
-# Invariants & Guardrails Registry
-# Safety constraints that agents must respect
-# Format: explicit, simple language, grep-friendly
+> Brief description: what does this system do?
 
-## Critical Invariants
+## Quick Start
 
-# These MUST NOT be violated by any agent action:
+| Action | Command |
+|--------|---------|
+| Install | `npm install` |
+| Dev | `npm run dev` |
+| Test | `npm test` |
+| Build | `npm run build` |
 
-INVARIANT: [ID] [Description]
-REASON: [Why this matters]
-ENFORCED_BY: [How it's enforced - tests, CI, manual review]
+## Entry Points
 
-### Example Invariants
+- `src/index.ts` - Main entry point
+- `package.json` - Dependencies and scripts
 
-INVARIANT: AUTH-001 All authentication logic lives in src/auth/
-REASON: Security audit scope, single point of control
-ENFORCED_BY: Code review, architectural tests
+## Domains
 
-INVARIANT: DB-001 Database writes must go through repository layer
-REASON: Transaction management, audit logging
-ENFORCED_BY: Linting rules, code review
+| Domain | Path | Risk | Description |
+|--------|------|------|-------------|
+| | | | *Run "annotate this codebase" to populate* |
 
-INVARIANT: API-001 All external API calls must include timeout
-REASON: Prevent cascade failures
-ENFORCED_BY: Custom lint rule
+## Cross-References (Blast Radius)
 
-## Soft Constraints
+When modifying code, check what depends on it:
 
-# Strong preferences that can be overridden with justification:
+| When Modifying | Also Check | Why |
+|----------------|------------|-----|
+| | | *Generated during annotation* |
 
-PREFER: [Description]
-INSTEAD_OF: [Anti-pattern]
-BECAUSE: [Reasoning]
+## Invariants
 
-## Protected Paths
+System-wide rules that must NEVER be violated:
 
-# Files/directories that require extra scrutiny before modification:
+| ID | Rule | Scope |
+|----|------|-------|
+| | *Discovered during annotation* | |
 
-PROTECTED: src/auth/          # Security-critical
-PROTECTED: src/billing/       # Financial logic
-PROTECTED: migrations/        # Database schema
+## Skills
 
-## Guardrail Index
+Generated skills for this codebase:
 
-# Quick reference:
-GUARD: AUTH-001 - Auth in src/auth/ only
-GUARD: DB-001 - Writes through repository
-GUARD: API-001 - Timeouts on external calls
-EOF
-}
+| Skill | When to Use | Risk |
+|-------|-------------|------|
+| | *Generated during annotation* | |
 
-create_tasks_template() {
-    local file="$1"
+## Current Work
 
-    cat > "$file" <<'EOF'
-# Task & Progress Memory
-# Multi-session task tracking for agents
-# Format: grep-friendly, agent-updatable, human-editable
-
-## Active Tasks
-
-### TASK-001: [Title]
-
-STATUS: pending | in_progress | blocked | completed
-GOAL: [What needs to be accomplished]
-STARTED: YYYY-MM-DD
-UPDATED: YYYY-MM-DD
-
-FILES_TOUCHED:
-- [file1]
-- [file2]
-
-PROGRESS:
-- [x] Step 1
-- [ ] Step 2
-- [ ] Step 3
-
-BLOCKERS:
-- [Any blocking issues]
-
-OPEN_QUESTIONS:
-- [Questions needing answers]
-
-NEXT_STEPS:
-- [Immediate next actions]
+*Track multi-session tasks here*
 
 ---
 
-## Task Index
+# For Claude: How This Works
 
-# Quick reference:
-TASK: 001 - [Title] - STATUS
+## First Time Setup
 
-## Completed Tasks
+If the tables above are empty, the user needs to say **"annotate this codebase"**.
 
-# Move completed tasks here for reference
+When they do, follow the annotation workflow below to:
+1. Add @claude headers to key files
+2. Generate domain-specific skills
+3. Fill in the atlas tables above
 
----
+## @claude Header Format
 
-## Session Log
-
-# Brief notes from each work session:
-
-SESSION: YYYY-MM-DD HH:MM
-WORKED_ON: TASK-XXX
-SUMMARY: [What was accomplished]
-NEXT: [What to do next]
-
-EOF
-}
-
-create_contract_template() {
-    local file="$1"
-
-    cat > "$file" <<'EOF'
-# Claude Contract
-# Explicit agreement between humans and agents
-# Referenced by skills and subagents
-
-## Permissions
-
-### Autonomous Actions
-
-# Claude MAY do these without asking:
-ALLOW: Read any file in the repository
-ALLOW: Run tests
-ALLOW: Run linters and formatters
-ALLOW: Create files in designated directories
-ALLOW: Edit files to fix bugs or implement requested features
-
-### Requires Confirmation
-
-# Claude MUST ask before doing these:
-CONFIRM: Delete files
-CONFIRM: Modify configuration files
-CONFIRM: Run commands that affect external systems
-CONFIRM: Make breaking API changes
-CONFIRM: Modify security-related code
-CONFIRM: Push to remote repositories
-
-### Prohibited Actions
-
-# Claude must NEVER do these:
-DENY: Commit directly to main branch
-DENY: Modify .env or secrets files
-DENY: Run destructive database commands
-DENY: Access external services without explicit permission
-
-## Style Preferences
-
-### Code Style
-
-STYLE: Follow existing patterns in the codebase
-STYLE: Prefer explicit over clever
-STYLE: Add comments only when logic isn't self-evident
-STYLE: Match existing formatting conventions
-
-### Communication Style
-
-COMM: Be concise
-COMM: Explain reasoning for non-obvious decisions
-COMM: Ask before large refactors
-COMM: Summarize changes after completing tasks
-
-## Safety Preferences
-
-SAFETY: Always create backups before destructive operations
-SAFETY: Run tests before marking tasks complete
-SAFETY: Review INVARIANTS.md before modifying protected paths
-SAFETY: Check for breaking changes in public APIs
-
-## Project-Specific Rules
-
-# Add custom rules for this project:
-# RULE: [Description]
-
-EOF
-}
-
-create_claude_instructions() {
-    local file="$1"
-
-    cat > "$file" <<'EOF'
-# Claude Code Instructions
-
-This project uses **Based Claude** - a memory layer that helps you persist understanding across sessions.
-
----
-
-## On Session Start
-
-1. **Read `.claude-sdk/ATLAS.md`** - Orient yourself to the codebase
-2. **Check `.claude-sdk/memory/TASKS.md`** - Any in-progress work?
-3. **Review `.claude-sdk/CONTRACT.md`** - What are your permissions?
-
-If the ATLAS.md says "not-yet-built", offer to build it (see below).
-
----
-
-## Building the Atlas
-
-When asked to **"build the atlas"** or **"generate the atlas"**:
-
-1. Read `.claude-sdk/prompts/BUILD_ATLAS.md` for detailed instructions
-2. Explore the codebase structure
-3. Generate `.claude-sdk/ATLAS.md` (root index)
-4. Generate `.claude-sdk/atlas/*.atlas.md` (folder maps)
-
-The Atlas answers:
-- "What is this system?"
-- "Where should I look?"
-- "What matters?"
-- "What must NOT be broken?"
-
-When asked to **"refresh the atlas"**:
-1. Read `.claude-sdk/prompts/REFRESH_ATLAS.md`
-2. Update only what changed (preserve NOTES sections)
-
----
-
-## Before Modifying Code
-
-1. **Check `.claude-sdk/memory/INVARIANTS.md`** for safety constraints
-2. Respect all `INVARIANT:` and `PROTECTED:` entries
-3. If touching a high-risk path, mention it explicitly
-
----
-
-## During Work
-
-### Task Tracking
-
-Update `.claude-sdk/memory/TASKS.md`:
-- Set STATUS to `in_progress` when starting
-- Add files to `FILES_TOUCHED` as you modify them
-- Update `PROGRESS` checkboxes
-- Set STATUS to `completed` when done
-- For multi-session work, add a `SESSION:` log entry
-
-### Decision Recording
-
-For architectural decisions, add to `.claude-sdk/memory/DECISIONS.md`:
-```
-### ADR-XXX: [Title]
-STATUS: accepted
-DATE: YYYY-MM-DD
-CONTEXT: [Why needed]
-DECISION: [What decided]
-ALTERNATIVES: [What else considered]
-```
-
-### Discovering Invariants
-
-If you discover rules like "all auth goes through X" or "never write directly to Y":
-- Add them to `.claude-sdk/memory/INVARIANTS.md`
-- Reference them in the relevant Atlas folder map
-
----
-
-## Permissions (from CONTRACT.md)
-
-**Autonomous** (no confirmation needed):
-- Read any file
-- Run tests and linters
-- Edit files for requested changes
-
-**Requires confirmation**:
-- Deleting files
-- Modifying configuration
-- Changes to PROTECTED paths
-- Large refactors
-
-**Prohibited**:
-- Direct commits to main
-- Modifying .env or secrets
-- Violating INVARIANTS.md
-
----
-
-## Quick Reference
+Add this to key files (entry points, critical code, high-risk areas):
 
 ```
-.claude-sdk/
-├── ATLAS.md              # Codebase overview (READ FIRST)
-├── CONTRACT.md           # Your permissions
-├── atlas/                # Per-folder maps
-├── memory/
-│   ├── DECISIONS.md      # Architecture decisions (ADRs)
-│   ├── INVARIANTS.md     # Safety constraints (CHECK BEFORE EDITS)
-│   └── TASKS.md          # Task tracking
-└── prompts/
-    ├── BUILD_ATLAS.md    # How to generate the atlas
-    └── REFRESH_ATLAS.md  # How to update the atlas
+/**
+ * @claude
+ * PURPOSE: [One line - what this file does]
+ * RISK: low | medium | high | critical
+ * INVARIANT: [File-specific rule, if any]
+ * USED_BY: [Files that import/depend on this - CRITICAL for blast radius]
+ * DEPENDS: [Key imports this file relies on]
+ */
 ```
 
----
+**USED_BY is the key insight** - it tells you what might break when you modify this file.
 
-## Commands
+## Annotation Workflow
 
-| User says | You do |
-|-----------|--------|
-| "build the atlas" | Read BUILD_ATLAS.md prompt, generate atlas |
-| "refresh the atlas" | Read REFRESH_ATLAS.md prompt, incremental update |
-| "what is this codebase?" | Read ATLAS.md, summarize |
-| "check for drift" | Compare ATLAS.md commit to current, report changes |
-EOF
-}
+When user says **"annotate this codebase"**:
 
-create_build_atlas_prompt() {
-    local file="$1"
-
-    cat > "$file" <<'EOF'
-# Build Repo Atlas
-
-You are generating a **Repo Atlas** - a persistent, grep-friendly codebase index that helps agents (including yourself) re-orient quickly after context loss.
-
-## Core Purpose
-
-The Atlas answers these questions in SECONDS:
-1. **"What is this system?"** - Overview, purpose, architecture
-2. **"Where should I look?"** - Entry points, domains, folder purposes
-3. **"What matters?"** - Critical paths, hot files, integration points
-4. **"What must NOT be broken?"** - High-risk areas, invariants, protected paths
-
-This is NOT a search index. It's an ORIENTATION document.
-
----
-
-## Step 1: Explore the Codebase
+### Phase 1: Explore & Map
 
 ```bash
-# Understand structure (ignore node_modules, dist, etc.)
+# 1. Understand structure
 ls -la
-find . -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" -o -name "*.go" \) | grep -v node_modules | grep -v dist | head -50
+cat package.json 2>/dev/null || cat pyproject.toml 2>/dev/null || cat go.mod 2>/dev/null
 
-# Find entry points
-cat package.json 2>/dev/null | head -30
-ls src/ 2>/dev/null
+# 2. Find all source files
+find . -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" -o -name "*.go" \) | grep -v node_modules | grep -v dist | grep -v __pycache__
+
+# 3. Identify domains (top-level src folders)
+ls src/ 2>/dev/null || ls app/ 2>/dev/null || ls lib/ 2>/dev/null
 ```
 
-Read key files to understand what this codebase DOES, not just what files exist.
+### Phase 2: Build Import Graph
 
----
+For each key file, discover:
+- **DEPENDS**: What it imports (read the imports)
+- **USED_BY**: What imports it (grep for the filename)
 
-## Step 2: Generate Root Atlas
+```bash
+# Find what imports a file (USED_BY)
+grep -r "from './auth'" src/ --include="*.ts"
+grep -r "import.*login" src/ --include="*.ts"
+```
 
-Create `.claude-sdk/ATLAS.md` with this EXACT format:
+### Phase 3: Classify Risk
 
+| Risk | Criteria |
+|------|----------|
+| critical | Auth, payments, security, secrets, encryption |
+| high | Database, external APIs, data mutations, PII |
+| medium | Business logic, API routes, services |
+| low | Utilities, helpers, types, constants |
+
+### Phase 4: Annotate Key Files (10-30 files)
+
+Add @claude headers to:
+- Entry points (index, main, app)
+- API routes/endpoints
+- Auth/security code
+- Database/data layer
+- Core business logic
+- Shared utilities used by many files
+
+**Skip**: Tests, type-only files, generated code, configs, node_modules
+
+### Phase 5: Generate Skills
+
+For each CRITICAL or HIGH risk domain, create a skill directory.
+
+**Skill structure** (skills are directories, not single files):
+```
+.claude/skills/
+└── modify-[domain]/
+    └── SKILL.md
+```
+
+**SKILL.md format**:
 ```markdown
-# REPO ATLAS
-# Generated by Claude - Human-editable
-# Re-run "build the atlas" to refresh (preserves NOTES section)
+---
+name: modify-[domain]
+description: Use when modifying any code in [path]. This is [RISK] risk code. Handles [what it does].
+---
 
-BUILT: [ISO timestamp]
-COMMIT: [git hash or "not-a-repo"]
-TYPE: [node|python|go|rust|java|mixed]
+# Modifying [Domain] Code
 
-## OVERVIEW
+## Risk Level: [CRITICAL/HIGH]
 
-PROJECT: [name]
-PURPOSE: [One sentence - what does this system DO?]
-ARCHITECTURE: [One sentence - key architectural pattern]
+[Why this domain is sensitive]
 
-## ENTRY POINTS
+## Files in This Domain
 
-# Where to start reading this codebase:
-ENTRY: [file] # [why this is an entry point]
+| File | Purpose | USED_BY |
+|------|---------|---------|
+| [file.ts] | [purpose] | [consumers] |
 
-## MAJOR DOMAINS
+## Invariants
 
-# Top-level organization - what are the major subsystems?
-DOMAIN: [path/] # [one-line purpose]
+- [Rule 1]
+- [Rule 2]
 
-## CRITICAL PATHS
+## Before Making Changes
 
-# Code that is high-risk, load-bearing, or frequently changed:
-CRITICAL: [path] # [why - e.g., "auth logic", "payment processing"]
+1. Read the @claude header for USED_BY
+2. Understand what depends on your changes
 
-## CROSS-CUTTING CONCERNS
+## After Making Changes
 
-# Where does logging, auth, error handling, etc. live?
-CONCERN: auth -> [path]
-CONCERN: logging -> [path]
-CONCERN: errors -> [path]
+1. Run tests: `[test command]`
+2. Verify consumers still work: [list USED_BY files]
 
-## EXTERNAL INTEGRATIONS
+## Common Patterns
 
-# What external services/APIs does this connect to?
-EXTERNAL: [service] # [where handled]
-
-## SEARCH ANCHORS
-
-# Grep patterns for navigating this codebase:
-GREP: "[pattern]" # [what it finds]
-
-## RELATED MEMORY
-
-DECISIONS: .claude-sdk/memory/DECISIONS.md
-INVARIANTS: .claude-sdk/memory/INVARIANTS.md
-TASKS: .claude-sdk/memory/TASKS.md
-CONTRACT: .claude-sdk/CONTRACT.md
-
-## NOTES
-
-[Add architectural notes, gotchas, tribal knowledge here.
-This section is preserved across rebuilds.]
+### [Pattern name]
+[Steps]
 ```
 
----
+### Phase 6: Update This File (CLAUDE.md)
 
-## Step 3: Generate Folder Maps
+1. Fill in the **Domains** table at the top
+2. Fill in the **Cross-References** table from USED_BY data
+3. Add discovered **Invariants**
+4. Update **Skills** table with generated skills
+5. Update the project name and description
+6. Update metadata at bottom (BUILT, COMMIT, counts)
 
-For each MAJOR folder, create `.claude-sdk/atlas/[folder-name].atlas.md`:
-
-```markdown
-# FOLDER: [path]
-
-PURPOSE: [1-2 sentences - what does this folder DO?]
-LAYER: [presentation|business|data|infrastructure|test|config]
-RISK: [low|medium|high|critical]
-
-## KEY FILES
-
-FILE: [name] # [one-line purpose]
-
-## PUBLIC INTERFACE
-
-EXPORT: [symbol] # [what it does]
-ROUTE: [path] [METHOD] # [handler] (if applicable)
-
-## DEPENDENCIES
-
-DEPENDS_ON: [path] # [why]
-
-## INVARIANTS
-
-INVARIANT: [rule that must not be violated]
-
-## SEARCH ANCHORS
-
-GREP: "[pattern]" # [what it finds]
-
-## NOTES
-
-[Folder-specific notes]
-```
-
----
-
-## Risk Assessment
-
-Mark as high-risk if involves:
-- **Authentication/Authorization** - RISK: critical
-- **Payment/Billing** - RISK: critical
-- **Data mutations** - RISK: high
-- **External APIs** - RISK: high
-- **Database schemas** - RISK: high
-
----
-
-## Exclusions (NEVER index)
-
-- node_modules/, vendor/, .venv/
-- dist/, build/, target/
-- .git/, coverage/
-- .env, *.pem, *.key
-
----
-
-## Format Rules
-
-1. **One concept per line** - No paragraphs
-2. **Deterministic prefixes** - ENTRY:, DOMAIN:, FILE:, EXPORT:, etc.
-3. **Grep-friendly** - `grep "^ROUTE:" ATLAS.md` should work
-4. **Minimal prose** - Save explanations for NOTES
-
----
-
-## After Generation
+### Phase 7: Report to User
 
 Tell the user:
-1. Atlas created at `.claude-sdk/ATLAS.md`
-2. Folder maps at `.claude-sdk/atlas/`
-3. Review and edit the NOTES sections
-4. Run "refresh the atlas" after major changes
-EOF
-}
+- How many files annotated
+- What domains found
+- What skills generated
+- Any concerns discovered (security issues, missing tests, etc.)
+- Suggest they review the invariants
 
-create_refresh_atlas_prompt() {
-    local file="$1"
+---
 
-    cat > "$file" <<'EOF'
-# Refresh Repo Atlas
+## Ongoing Usage
 
-Perform an INCREMENTAL update to the Repo Atlas.
+### When Working on Tasks
 
-## Step 1: Check What Changed
+1. **Read this file** (you're doing that now - it's auto-loaded)
+2. **Check the Skills table** - is there a skill for this domain?
+3. **If yes, read the skill** at `.claude/skills/[skill-name]/SKILL.md`
+4. **Before modifying a file**, check its @claude header for USED_BY
+5. **After changes**, verify files in USED_BY still work
 
-```bash
-# Get atlas build commit
-grep "^COMMIT:" .claude-sdk/ATLAS.md
+**Tip**: Use the skill-creator skill for guidance on creating well-structured skills:
+`.claude/skills/skill-creator/SKILL.md`
 
-# Get current commit
-git rev-parse --short HEAD
+### When User Says "refresh the atlas"
 
-# Find changed files
-git diff --name-only [atlas-commit]..HEAD
-```
+1. Check what files changed since last annotation (compare COMMIT)
+2. Rebuild import graph for changed files
+3. Update USED_BY in affected headers
+4. Regenerate cross-references table
+5. Update skills if domain structure changed
+6. Update BUILT timestamp and COMMIT
 
-## Step 2: Update Affected Folders
+---
 
-For each folder with changes:
-1. Read existing `.claude-sdk/atlas/[folder].atlas.md`
-2. Re-analyze the folder
-3. Update FILE:, EXPORT:, ROUTE: entries
-4. **PRESERVE the NOTES section**
-
-## Step 3: Update Root Atlas
-
-1. Update BUILT: timestamp
-2. Update COMMIT: hash
-3. Add/remove DOMAIN: entries if needed
-4. **PRESERVE the NOTES section**
-
-## Step 4: Report Drift
-
-Warn if:
-- Folders in atlas no longer exist
-- New folders appeared
-- File counts changed dramatically
-
-## Format
-
-Keep all existing format rules - one concept per line, deterministic prefixes.
-EOF
+BUILT: not-yet-annotated
+COMMIT: unknown
+FILES_ANNOTATED: 0
+SKILLS_GENERATED: 0
+CLAUDEMD
 }
